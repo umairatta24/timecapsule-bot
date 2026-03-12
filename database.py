@@ -80,3 +80,35 @@ def delete_capsule(capsule_id, user_id):
     conn.commit()
     conn.close()
     return deleted > 0
+
+def get_next_capsule(user_id):
+    """Return the next capsule due to reveal for a user."""
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("""
+        SELECT id, message, reveal_at
+        FROM capsules
+        WHERE user_id = ? AND revealed = 0
+        ORDER BY reveal_at ASC
+        LIMIT 1
+    """, (user_id,))
+    row = c.fetchone()
+    conn.close()
+    return row
+
+def get_leaderboard(limit=10):
+    """Return top users by total capsules sealed."""
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("""
+        SELECT username, 
+               COUNT(*) as total,
+               SUM(CASE WHEN revealed = 1 THEN 1 ELSE 0 END) as revealed_count
+        FROM capsules
+        GROUP BY user_id
+        ORDER BY total DESC
+        LIMIT ?
+    """, (limit,))
+    rows = c.fetchall()
+    conn.close()
+    return rows

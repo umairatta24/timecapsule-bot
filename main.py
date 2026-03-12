@@ -4,7 +4,7 @@ from discord.ext import tasks
 from dotenv import load_dotenv
 import os
 from datetime import datetime, timedelta, timezone
-from database import init_db, add_capsule, get_due_capsules, mark_revealed, get_user_capsules, delete_capsule
+from database import init_db, add_capsule, get_due_capsules, mark_revealed, get_user_capsules, delete_capsule, get_next_capsule, get_leaderboard
 
 load_dotenv()
 
@@ -129,6 +129,46 @@ async def check_capsules():
             f">>> {message}"
         )
         mark_revealed(capsule_id)
+@tree.command(name="peek", description="See how long until your next capsule reveals")
+async def peek(interaction: discord.Interaction):
+    row = get_next_capsule(str(interaction.user.id))
+    if not row:
+        await interaction.response.send_message(
+            "You have no pending time capsules.",
+            ephemeral=True
+        )
+        return
+
+    capsule_id, message, reveal_at = row
+    reveal_dt = datetime.fromisoformat(reveal_at).replace(tzinfo=timezone.utc)
+    reveal_timestamp = int(reveal_dt.timestamp())
+
+    await interaction.response.send_message(
+        f"🔍 Your next capsule (ID: `{capsule_id}`) reveals <t:{reveal_timestamp}:R> on <t:{reveal_timestamp}:F>.\n"
+        f"No peeking at the message! 🔒",
+        ephemeral=True
+    )
+
+@tree.command(name="leaderboard", description="See who has sealed the most time capsules")
+async def leaderboard(interaction: discord.Interaction):
+    rows = get_leaderboard()
+    if not rows:
+        await interaction.response.send_message(
+            "No capsules have been sealed yet. Be the first!",
+            ephemeral=False
+        )
+        return
+
+    medals = ["🥇", "🥈", "🥉"]
+    lines = ["**⏳ Time Capsule Leaderboard**\n"]
+    for i, row in enumerate(rows):
+        username, total, revealed_count = row
+        medal = medals[i] if i < 3 else f"`{i+1}.`"
+        pending = total - revealed_count
+        lines.append(f"{medal} **{username}** — {total} sealed, {revealed_count} revealed, {pending} pending")
+
+    await interaction.response.send_message("\n".join(lines), ephemeral=False)
+
 
 init_db()
 client.run(os.getenv("DISCORD_TOKEN"))
